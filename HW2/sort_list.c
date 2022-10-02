@@ -15,12 +15,12 @@
 #define DEBUG 0
 
 // Thread variables
-struct threadVar {
+struct threadArg {
     int id;
     int q;
 };
-struct threadVar *threadVarList;
-pthread_barrier_t barriers[4];
+struct threadArg *threadArgList;
+pthread_barrier_t barrierList[4];
 
 // Global variables
 int num_threads;		// Number of threads to create - user input 
@@ -114,9 +114,9 @@ int binary_search_le(int v, int *list, int first, int last) {
 //
 void* sort_list(void *context) {
     
-    struct threadVar *variables = (struct threadVar *)context;
-    int q = variables->q;
-    int my_id = variables->id;
+    struct threadArg *threadArgs = (struct threadArg *)context;
+    int q = threadArgs->q;
+    int my_id = threadArgs->id;
 
     int i, level; 
     int np, my_list_size;
@@ -132,13 +132,13 @@ void* sort_list(void *context) {
     // Initialize starting position for each sublist
     ptr[my_id] = my_id * np;
 
-    pthread_barrier_wait(&barriers[0]);
+    pthread_barrier_wait(&barrierList[0]);
 
     // Sort local lists
     my_list_size = ptr[my_id+1]-ptr[my_id];
     qsort(&list[ptr[my_id]], my_list_size, sizeof(int), compare_int);
 
-    pthread_barrier_wait(&barriers[1]);
+    pthread_barrier_wait(&barrierList[1]);
 
     if (DEBUG) print_list(list, list_size); 
 
@@ -188,14 +188,14 @@ void* sort_list(void *context) {
 	    work[i_write] = list[i];
 	}
 
-        pthread_barrier_wait(&barriers[2]);
+        pthread_barrier_wait(&barrierList[2]);
 
         // Copy work into list for next itertion
 	for (i = ptr[my_id]; i < ptr[my_id+1]; i++) {
 	    list[i] = work[i];
 	} 
 
-        pthread_barrier_wait(&barriers[3]);
+        pthread_barrier_wait(&barrierList[3]);
 
         if (DEBUG) print_list(list, list_size); 
     }
@@ -264,11 +264,12 @@ int main(int argc, char *argv[]) {
 //
 // VS: ... may need to initialize mutexes, condition variables, and their attributes
 //
-    int pointer[num_threads+1];
-    ptr = pointer;
+    int initPtr[num_threads+1];
+    ptr = initPtr;
+
     ptr[num_threads] = list_size;
-    struct threadVar localthreadVars[num_threads];
-    threadVarList = localthreadVars;
+    struct threadArg localthreadArgList[num_threads];
+    threadArgList = localthreadArgList;
 
 // Serial merge sort 
 // VS: ... replace this call with multi-threaded parallel routine for merge sort
@@ -277,18 +278,18 @@ int main(int argc, char *argv[]) {
 
     pthread_t threads[num_threads];
 
-    for (int barrier = 0; barrier < 4; barrier++) {
-	pthread_barrier_init(&barriers[barrier], NULL, num_threads);
+    for (int i = 0; i < 4; i++) {
+	pthread_barrier_init(&barrierList[i], NULL, num_threads);
     }
 
-    for (int threadCount = 0; threadCount < num_threads; threadCount++) {
-        threadVarList[threadCount].id = threadCount;
-        threadVarList[threadCount].q = q;
-        pthread_create(&threads[threadCount], NULL, sort_list, (void *)&threadVarList[threadCount]);
+    for (int j = 0; j < num_threads; j++) {
+        threadArgList[j].id = j;
+        threadArgList[j].q = q;
+        pthread_create(&threads[j], NULL, sort_list, (void *)&threadArgList[j]);
     }
 
-    for (int threadCount = 0; threadCount < num_threads; threadCount++) {
-        pthread_join(threads[threadCount], NULL);
+    for (int k = 0; k < num_threads; k++) {
+        pthread_join(threads[k], NULL);
     }
 
     // Compute time taken
